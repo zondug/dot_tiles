@@ -1,61 +1,79 @@
 extends Node2D
 
-var angle_h := 75.0 # Desired angle (in degrees) - Angle between (0, 0) and (0, 1)
+var angle_h := 35.0 # Desired angle (in degrees) - Angle between (0, 0) and (0, 1)
 var angle_w := -25.0 # Desired angle (in degrees) - Angle between (0, 0) and (1, 0)
 var adj_distance := 3  # Set the distance between adjacent points
 
 const grid_size_x = 13
 const grid_size_y = 13
-const cell_width = 50 # Cell size on the x-axis
-const cell_height = 25 # Cell size on the y-axis
+const cell_width = 45 # Cell size on the x-axis
+const cell_height = 22.5 # Cell size on the y-axis
 const dot_size_multiple_of_4 = 5 # Dot size for grid points where both x and y are multiples of 4
 const dot_size_others = 1 # Dot size for other grid points
 var selected_dot = null
-
-@onready var line_edit = $CanvasLayer/CanvasGroup/LineEdit
-@onready var line_edit_2 = $CanvasLayer/CanvasGroup/LineEdit2
-@onready var line_edit_3 = $CanvasLayer/CanvasGroup/LineEdit3
+var rightmost_dot = null
 
 var grid_width = grid_size_x * cell_width
 var grid_height = grid_size_y * cell_height
 
 var dot_positions = [] # Table to store the coordinates of each point
 var route = []  # Array to store the path
-
+var screen_dot_positions = []
+var h_offsets = calculate_offsets(angle_h)
+var w_offsets = calculate_offsets(angle_w)
+var x_offset_h = h_offsets.x
+var y_offset_h = h_offsets.y
+var x_offset_w = w_offsets.x
+var y_offset_w = w_offsets.y
 
 func _ready():
-	line_edit.text = str(angle_h) # Assign the text property to label
-	line_edit_2.text = str(angle_w) 
-	line_edit_3.text = str(adj_distance) 
-	
-	var viewport_size = get_viewport_rect().size
-	var grid_origin = Vector2(viewport_size.x * 1/3, viewport_size.y * 1/3)
-	position = grid_origin - Vector2((grid_size_x - 1) * cell_width * calculate_offsets(angle_w).x / 2 + (grid_size_y - 1) * cell_width * calculate_offsets(angle_h).x / 2,
-									 (grid_size_x - 1) * cell_height * calculate_offsets(angle_w).y / 2 + (grid_size_y - 1) * cell_height * calculate_offsets(angle_h).y / 2)
+	pass
+
+func calculate_offset():
+	var grid_center = calculate_grid_center()
+	var grid_center_index = int(grid_center.y) * grid_size_x + int(grid_center.x)
+	print(screen_dot_positions)
+	var center_dot_screen = screen_dot_positions[grid_center_index] if grid_center_index >= 0 and grid_center_index < screen_dot_positions.size() else Vector2.ZERO
+	var viewport_center = get_viewport_rect().size / 2
+	var offset = viewport_center - center_dot_screen
+	return offset
 
 func _draw():
-	var h_offsets = calculate_offsets(angle_h)
-	var w_offsets = calculate_offsets(angle_w)
-	var x_offset_h = h_offsets.x
-	var y_offset_h = h_offsets.y
-	var x_offset_w = w_offsets.x
-	var y_offset_w = w_offsets.y
-
 	dot_positions.clear()
+	screen_dot_positions.clear()
 
 	for i in range(grid_size_x):
 		for j in range(grid_size_y):
 			var x = position.x + i * cell_width * x_offset_w + j * x_offset_h * cell_width
 			var y = position.y + i * cell_height * y_offset_w + j * cell_height * y_offset_h
 			var dot_position = Vector2(x, y)
+			#if i == 0 and j == 0:
+				#draw_circle(dot_position, 20, Color.YELLOW)
+			screen_dot_positions.append(dot_position)  # Store the actual screen coordinates of the point
 			var dot_size = dot_size_multiple_of_4 if i % 4 == 0 and j % 4 == 0 else dot_size_others
 
 			draw_circle(dot_position, dot_size, Color.RED)
 			dot_positions.append(Vector2(i, j))  # Store the coordinates (i, j) of the point in the array
 
+	var offset = calculate_offset()
+	position += offset
+
+	for i in range(screen_dot_positions.size()):
+		screen_dot_positions[i] += offset
+
+	var rightmost_dot = find_rightmost_dot()
+	if rightmost_dot != null:
+		pass
+		#draw_circle(rightmost_dot, 20, Color.YELLOW)
+	
 	draw_selected_dot()  # Call the function to draw the selected point
-	draw_adjacent_dots()  # Call the function to draw the adjacent points
-	#draw_route()  # Call the function to draw the path
+	#draw_adjacent_dots()  # Call the function to draw the adjacent points
+	draw_route()  # Call the function to draw the path
+
+func calculate_grid_center():
+	var grid_center_x = (grid_size_x - 1) / 2
+	var grid_center_y = (grid_size_y - 1) / 2
+	return Vector2(grid_center_x, grid_center_y)
 
 
 func draw_selected_dot(): # Call the function to draw the selected point
@@ -109,15 +127,30 @@ func _input(event):
 		var closest_dot = find_closest_dot(mouse_position)
 		if closest_dot != null:
 			selected_dot = closest_dot
-			print("Clicked coordinates: ", selected_dot)
+			#print("Clicked coordinates: ", selected_dot)
 			
-			update_nearby_dots(adj_distance)  # Call update_nearby_dots function passing adj_distance value
+			#update_nearby_dots(adj_distance)  # Call update_nearby_dots function passing adj_distance value
 			find_path(Vector2(0, 0), selected_dot)  # Find the path from (0, 0) to the selected point
 			queue_redraw()  # Call queue_redraw to redraw the highlighted point
 		else:
 			selected_dot = null
 			route.clear()  # Clear the path
 			queue_redraw()
+
+func find_center_dot():
+	var center_dot_grid = (rightmost_dot + Vector2(1, 1)) / 2
+	return center_dot_grid
+
+func find_rightmost_dot():
+	rightmost_dot = null
+	var max_x = -INF
+	
+	for dot_position in screen_dot_positions:
+		if dot_position.x > max_x:
+			max_x = dot_position.x
+			rightmost_dot = dot_position
+	
+	return rightmost_dot
 
 func find_closest_dot(mouse_position):
 	var min_distance = INF
@@ -230,18 +263,3 @@ func calculate_offsets(angle_degrees):
 	var x_offset = cos(angle_radians)
 	var y_offset = sin(angle_radians)
 	return Vector2(x_offset, y_offset)
-
-func _on_line_edit_text_submitted(new_text):
-	angle_h = float(new_text)
-	print("Entered (0, 0) and (0, 1) Angle: ", angle_h)
-	queue_redraw()
-
-func _on_line_edit_2_text_submitted(new_text):
-	angle_w = float(new_text)
-	print("Entered (0, 0) and (1, 0) Angle: ", angle_w)
-	queue_redraw()
-
-func _on_line_edit_3_text_submitted(new_text):
-	adj_distance = float(new_text)
-	print("Entered distance: ", adj_distance)
-	queue_redraw()
